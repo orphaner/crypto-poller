@@ -29,7 +29,7 @@ type (
 	}
 
 	CoinDeskClient interface {
-		Pull() *CurrentPrice
+		PullCurrentPrice() *CurrentPrice
 	}
 	CoinDeskClientImpl struct {
 	}
@@ -41,7 +41,7 @@ type (
 	}
 )
 
-func (cdClient *CoinDeskClientImpl) PullCurrentPrice() CurrentPrice {
+func (cdClient *CoinDeskClientImpl) PullCurrentPrice() *CurrentPrice {
 	var uri = "https://api.coindesk.com/v1/bpi/currentprice.json"
 	request, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
@@ -56,10 +56,10 @@ func (cdClient *CoinDeskClientImpl) PullCurrentPrice() CurrentPrice {
 	var currentPrice CurrentPrice
 	json.NewDecoder(response.Body).Decode(&currentPrice)
 
-	return currentPrice
+	return &currentPrice
 }
 
-func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinRate CurrentPrice) {
+func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinPrice CurrentPrice) {
 
 	// Create a new HTTPClient
 	influxdbClient, err := client.NewHTTPClient(client.HTTPConfig{
@@ -81,7 +81,7 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinRate CurrentPrice) {
 		log.Fatal(err)
 	}
 
-	for currency, value := range bitcoinRate.PriceByCurrency {
+	for currency, value := range bitcoinPrice.PriceByCurrency {
 
 		// Create a point and add to batch
 		tags := map[string]string{"currency": currency}
@@ -89,7 +89,7 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinRate CurrentPrice) {
 			"rate": value.RateFloat,
 		}
 
-		point, err := client.NewPoint("bitcoin_rate", tags, fields, time.Now())
+		point, err := client.NewPoint("bitcoin_price", tags, fields, time.Now())
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -113,5 +113,5 @@ func main() {
 	fmt.Printf("%+v\n", price)
 
 	var influxdbClient InfluxdbCryptoPollerImpl
-	influxdbClient.CreatePoints(price)
+	influxdbClient.CreatePoints(*price)
 }
