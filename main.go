@@ -4,16 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/influxdata/influxdb/client/v2"
+	"github.com/namsral/flag"
 	"log"
 	"net/http"
 	"time"
-)
-
-const (
-	username    = "user"
-	password    = "password"
-	influxdbUrl = "http://localhost:8086"
-	MyDB        = "crypto"
 )
 
 type (
@@ -38,6 +32,10 @@ type (
 		CreatePoints(bitcoinRate CurrentPrice)
 	}
 	InfluxdbCryptoPollerImpl struct {
+		Username string
+		Password string
+		Url      string
+		Database string
 	}
 )
 
@@ -63,9 +61,9 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinPrice CurrentPrice) 
 
 	// Create a new HTTPClient
 	influxdbClient, err := client.NewHTTPClient(client.HTTPConfig{
-		Addr:     influxdbUrl,
-		Username: username,
-		Password: password,
+		Addr:     poller.Url,
+		Username: poller.Username,
+		Password: poller.Password,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -74,7 +72,7 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinPrice CurrentPrice) 
 
 	// Create a new point batch
 	batchPoints, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  MyDB,
+		Database:  poller.Database,
 		Precision: "s",
 	})
 	if err != nil {
@@ -108,10 +106,22 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinPrice CurrentPrice) 
 }
 
 func main() {
+	username := flag.String("influxdb-username", "username", "Username to connect to influxdb")
+	password := flag.String("influxdb-password", "password", "Password to connect to influxdb")
+	url := flag.String("influxdb-url", "http://localhost:8086", "URL to connect to influxdb")
+	database := flag.String("influxdb-database", "crypto", "Database to use in influxdb")
+	flag.Parse()
+
+	influxdbClient := InfluxdbCryptoPollerImpl{
+		Username: *username,
+		Password: *password,
+		Url:      *url,
+		Database: *database,
+	}
+	fmt.Printf("%+v\n", influxdbClient)
+
 	var coinDeskClient CoinDeskClientImpl
 	var price = coinDeskClient.PullCurrentPrice()
 	fmt.Printf("%+v\n", price)
-
-	var influxdbClient InfluxdbCryptoPollerImpl
 	influxdbClient.CreatePoints(*price)
 }
