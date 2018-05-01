@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/influxdata/influxdb/client/v2"
 	"github.com/namsral/flag"
 	"log"
-	"net/http"
 	"time"
 )
 
@@ -22,48 +19,24 @@ type (
 		RateFloat   float32 `json:"rate_float"`
 	}
 
-	CoinDeskClient interface {
-		PullCurrentPrice() *CurrentPrice
-	}
-	CoinDeskClientImpl struct {
-	}
-
 	InfluxdbCryptoPoller interface {
-		CreatePoints(bitcoinRate CurrentPrice)
+		CreatePoints(bitcoinRate chan CurrentPrice)
 	}
 	InfluxdbCryptoPollerImpl struct {
-		Username string
-		Password string
-		Url      string
-		Database string
+		username string
+		password string
+		url      string
+		database string
 	}
 )
 
-func (cdClient *CoinDeskClientImpl) PullCurrentPrice() *CurrentPrice {
-	var uri = "https://api.coindesk.com/v1/bpi/currentprice.json"
-	request, err := http.NewRequest("GET", uri, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var currentPrice CurrentPrice
-	json.NewDecoder(response.Body).Decode(&currentPrice)
-
-	return &currentPrice
-}
-
-func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinPrice CurrentPrice) {
+func (poller *InfluxdbCryptoPollerImpl) CreatePoints(ch chan CurrentPrice) {
 
 	// Create a new HTTPClient
 	influxdbClient, err := client.NewHTTPClient(client.HTTPConfig{
-		Addr:     poller.Url,
-		Username: poller.Username,
-		Password: poller.Password,
+		Addr:     poller.url,
+		Username: poller.username,
+		Password: poller.password,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -72,13 +45,15 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(bitcoinPrice CurrentPrice) 
 
 	// Create a new point batch
 	batchPoints, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  poller.Database,
+		Database:  poller.database,
 		Precision: "s",
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
+
+	bitcoinPrice := <-ch
 	for currency, value := range bitcoinPrice.PriceByCurrency {
 
 		// Create a point and add to batch
@@ -112,16 +87,23 @@ func main() {
 	database := flag.String("influxdb-database", "crypto", "Database to use in influxdb")
 	flag.Parse()
 
-	influxdbClient := InfluxdbCryptoPollerImpl{
-		Username: *username,
-		Password: *password,
-		Url:      *url,
-		Database: *database,
+	var influxdbClient InfluxdbCryptoPoller = &InfluxdbCryptoPollerImpl{
+		username: *username,
+		password: *password,
+		url:      *url,
+		database: *database,
 	}
-	fmt.Printf("%+v\n", influxdbClient)
+	log.Printf("%+v\n", influxdbClient)
 
-	var coinDeskClient CoinDeskClientImpl
-	var price = coinDeskClient.PullCurrentPrice()
-	fmt.Printf("%+v\n", price)
-	influxdbClient.CreatePoints(*price)
+	ch := make(chan CurrentPrice)
+	go influxdbClient.CreatePoints(ch)
+
+	var uri = "https://api.coindesk.com/v1/bpi/currentprice.json"
+	var currentPrice CurrentPrice
+	client := NewHttpClient()
+	if err:= client.JSON(uri, &currentPrice) ; err != nil {
+		log.Fatal(err)
+	}
+	ch <- currentPrice
+	log.Printf("%+v\n", currentPrice)
 }
