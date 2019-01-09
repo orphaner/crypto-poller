@@ -32,6 +32,10 @@ type (
 	}
 )
 
+var ch chan CurrentPrice
+var influxdbClient InfluxdbCryptoPoller
+const uri = "https://api.coindesk.com/v1/bpi/currentprice.json"
+
 func (poller *InfluxdbCryptoPollerImpl) CreatePoints(ch chan CurrentPrice) {
 
 	// Create a new HTTPClient
@@ -83,24 +87,9 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(ch chan CurrentPrice) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	username := flag.String("influxdb-username", "username", "Username to connect to influxdb")
-	password := flag.String("influxdb-password", "password", "Password to connect to influxdb")
-	url := flag.String("influxdb-url", "http://cp-influxdb:8086", "URL to connect to influxdb")
-	database := flag.String("influxdb-database", "crypto", "Database to use in influxdb")
-	flag.Parse()
-
-	var influxdbClient InfluxdbCryptoPoller = &InfluxdbCryptoPollerImpl{
-		username: *username,
-		password: *password,
-		url:      *url,
-		database: *database,
-	}
-	log.Printf("%+v\n", influxdbClient)
-
 	ch := make(chan CurrentPrice)
 	go influxdbClient.CreatePoints(ch)
 
-	var uri = "https://api.coindesk.com/v1/bpi/currentprice.json"
 	var currentPrice CurrentPrice
 	client := NewHttpClient()
 	if err:= client.JSON(uri, &currentPrice) ; err != nil {
@@ -119,6 +108,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	username := flag.String("influxdb-username", "username", "Username to connect to influxdb")
+	password := flag.String("influxdb-password", "password", "Password to connect to influxdb")
+	url := flag.String("influxdb-url", "http://localhost:8086", "URL to connect to influxdb")
+	database := flag.String("influxdb-database", "crypto", "Database to use in influxdb")
+	flag.Parse()
+
+	influxdbClient = &InfluxdbCryptoPollerImpl{
+		username: *username,
+		password: *password,
+		url:      *url,
+		database: *database,
+	}
+	log.Printf("%+v\n", influxdbClient)
+
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
