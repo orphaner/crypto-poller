@@ -5,6 +5,8 @@ import (
 	"github.com/namsral/flag"
 	"log"
 	"time"
+	"net/http"
+	"encoding/json"
 )
 
 type (
@@ -80,10 +82,10 @@ func (poller *InfluxdbCryptoPollerImpl) CreatePoints(ch chan CurrentPrice) {
 	}
 }
 
-func main() {
+func handler(w http.ResponseWriter, r *http.Request) {
 	username := flag.String("influxdb-username", "username", "Username to connect to influxdb")
 	password := flag.String("influxdb-password", "password", "Password to connect to influxdb")
-	url := flag.String("influxdb-url", "http://localhost:8086", "URL to connect to influxdb")
+	url := flag.String("influxdb-url", "http://cp-influxdb:8086", "URL to connect to influxdb")
 	database := flag.String("influxdb-database", "crypto", "Database to use in influxdb")
 	flag.Parse()
 
@@ -105,5 +107,18 @@ func main() {
 		log.Fatal(err)
 	}
 	ch <- currentPrice
-	log.Printf("%+v\n", currentPrice)
+
+	js, err := json.Marshal(currentPrice)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
+func main() {
+	http.HandleFunc("/", handler)
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
