@@ -4,6 +4,7 @@ import (
 	"github.com/influxdata/influxdb/client/v2"
 	"github.com/namsral/flag"
 	"log"
+	"fmt"
 	"time"
 	"net/http"
 	"encoding/json"
@@ -107,6 +108,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
+func ping(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "%s", "pong")
+}
+
 func main() {
 	username := flag.String("influxdb-username", "username", "Username to connect to influxdb")
 	password := flag.String("influxdb-password", "password", "Password to connect to influxdb")
@@ -123,5 +128,6 @@ func main() {
 	log.Printf("%+v\n", influxdbClient)
 
 	http.HandleFunc("/", handler)
+	http.HandleFunc("/ping", ping)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
